@@ -92,7 +92,7 @@ router.route('/register')
 router.use(function (req, res, next) {
 
     // check header or url parameters or post parameters for token
-    var token = req.body.token || req.query.token || req.headers['x-access-token'];
+    var token = req.body.token || req.query.token || req.headers['x-access-token'] || req.headers['authorization'];
 
     // decode token
     if (token) {
@@ -205,7 +205,7 @@ router.route('/me')
                                         'name': newUser.username,
                                         'email': newUser.email
                                     });
-                        });
+                            });
                     }
                 })
             }
@@ -225,6 +225,36 @@ router.route('/me')
                     });
             }
         });
+    });
+
+// Get user by ID
+router.route('/user/:id')
+    .get(function (req, res) {
+
+        var userId = req.params.id;
+
+        var sql = 'SELECT * FROM users WHERE uid=?';
+        connect.query(sql, userId, function (err, result) {
+            if (err) throw err;
+
+            var user = result[0];
+            console.log(user);
+
+            if (user) {
+                res.status(200, 'OK');
+                res.json(
+                    {
+                        'id': user.uid,
+                        'phone': user.phone,
+                        'name': user.username,
+                        'email': user.email
+                    });
+            }
+            else {
+                res.status(404, 'Not found');
+                res.json('empty');
+            }
+        })
     });
 
 app.use('/api', router);
