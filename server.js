@@ -8,7 +8,7 @@ var SECRET = 'someSecret';
 
 var connect = require('./dbconnection');
 var port = process.env.PORT || 8080;
-app.set('secret', SECRET);
+app.set('secret', config.secret);
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({
@@ -18,6 +18,7 @@ app.use(bodyParser.urlencoded({
 // an instance of the router for api routes
 var router = express.Router();
 
+//region Users API
 // Login user
 router.route('/login')
     .post(function (req, res) {
@@ -26,6 +27,7 @@ router.route('/login')
         var password = req.body.passw;
 
         connect.query('SELECT * FROM users WHERE email=?', email, function (err, users) {
+
             if (err) throw err;
 
             var user = users[0];
@@ -238,7 +240,6 @@ router.route('/user/:id')
             if (err) throw err;
 
             var user = result[0];
-            console.log(user);
 
             if (user) {
                 res.status(200, 'OK');
@@ -294,6 +295,72 @@ router.route('/user?')
             }
         });
     });
+
+//endregion
+
+//region Items API
+// Create item
+router.route('/item')
+    .post(function (req, res) {
+
+        var userId = req.decoded.id;
+
+        var sql = 'SELECT uid, phone, username, email FROM users WHERE uid=?';
+        connect.query(sql, userId, function (err, users) {
+            if (err) throw err;
+
+            var user = users[0];
+
+            var item = {
+                created_at: (req.body.created_at == '') ? new Date() : req.body.created_at,
+                title: req.body.title,
+                price: req.body.price,
+                product_img: req.body.img,
+                uid: user.uid
+            };
+
+            if (user) {
+                var sql = 'INSERT INTO items SET ?';
+                if (item.title && item.price) {
+                    connect.query(sql, item, function (err, result) {
+                        if (err) throw err;
+
+                        if (err) {
+                            res.json(500, err);
+                        }
+                        else {
+                            res.status(200, 'OK');
+                            res.json({
+                                'id': result.insertId,
+                                'created_at': item.created_at,
+                                'title': item.title,
+                                'price': item.price,
+                                'image': item.image,
+                                'user_id': item.uid,
+                                user: {
+                                    'id': user.uid,
+                                    'phone': user.phone,
+                                    'name': user.username,
+                                    'email': user.email
+                                }
+                            });
+                        }
+
+                    });
+                }
+                else {
+                    res.status(422, 'Unprocessable Entity');
+                    res.json({'field': 'title/price', 'message': 'Title and price is required'});
+                }
+            }
+            else {
+                res.status(401, 'Unauthorized');
+            }
+        });
+    });
+
+router.route('')
+//endregion
 
 app.use('/api', router);
 
