@@ -11,7 +11,7 @@ CREATE DATABASE IF NOT EXISTS bulletin_board_db;
 CREATE TABLE IF NOT EXISTS 'users'
 (
 'uid' int(11) AUTO_INCREMENT PRIMARY KEY,
-'username' varchar(255) NOT NULL UNIQUE KEY,
+'username' varchar(255) NOT NULL,
 'password' varchar(255) NOT NULL,
 'email' varchar(255) NOT NULL UNIQUE KEY,
 'phone' varchar(15) UNIQUE KEY,
