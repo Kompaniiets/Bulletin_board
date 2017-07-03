@@ -359,7 +359,77 @@ router.route('/item')
         });
     });
 
-router.route('')
+// Delete item by ID
+router.route('/item/:id')
+    .delete(function (req, res) {
+        var userId = req.decoded.id;
+        var itemId = req.params.id;
+
+        connect.query('SELECT uid FROM items WHERE iid=?', itemId, function (err, result) {
+            if (err) {
+                throw err;
+            }
+
+            var item = result[0];
+
+            if (item) {
+                if (item.uid == userId) {
+                    connect.query('DELETE FROM items WHERE iid=?', itemId, function (err, result) {
+                        if (err) {
+                            throw err;
+                        }
+                        else {
+                            res.status(200, 'OK');
+                            res.json('item is delete');
+                        }
+                    })
+                }
+                else {
+                    res.status(403, "Forbidden");
+                    res.end();
+                }
+            }
+            else {
+                res.status(404, "Not found");
+                res.end();
+            }
+        });
+    });
+
+// Get item by ID
+router.route('/item/:id')
+    .get(function (req, res) {
+        var itemId = req.params.id;
+
+        var sql = 'SELECT items.*, users.uid, users.phone, users.username, users.email ' +
+                    'FROM items, users WHERE items.iid=? AND items.uid=users.uid';
+        connect.query(sql, itemId, function (err, result) {
+            if (err) throw err;
+
+            var item = result[0];
+
+            if (item) {
+                res.json({
+                    'id': item.iid,
+                    'created_at': item.created_at,
+                    'title': item.title,
+                    'price': item.price,
+                    'image': item.product_img,
+                    'uid': item.uid,
+                    'user': {
+                        'id': item.uid,
+                        'phone': item.phone,
+                        'name': item.username,
+                        'email': item.email
+                    }
+                });
+            }
+            else {
+                res.status(404, 'Not found');
+            }
+        });
+    });
+
 //endregion
 
 app.use('/api', router);
