@@ -257,6 +257,44 @@ router.route('/user/:id')
         })
     });
 
+// Search users
+router.route('/user?')
+    .get(function (req, res) {
+
+        var searchQuery = [];
+        var sql = '';
+
+        if (req.query.name && req.query.email) {
+            searchQuery = [req.query.name, req.query.email];
+            sql = 'SELECT uid, phone, username, email FROM users WHERE username=? OR email=?';
+        }
+        else if (!req.query.name && req.query.email) {
+            searchQuery = [req.query.email];
+            sql = 'SELECT uid, phone, username, email FROM users WHERE email=?';
+        }
+        else if (req.query.name && !req.query.email) {
+            searchQuery = [req.query.name];
+            sql = 'SELECT uid, phone, username, email FROM users WHERE username=?';
+        }
+        else {
+            res.json('params is not found');
+            return;
+        }
+
+        connect.query(sql, searchQuery, function (err, users) {
+            if (err) throw err;
+
+            if (users.length) {
+                res.status(200, 'OK');
+                res.json(users);
+            }
+            else {
+                res.status(404, "User not found");
+                res.json('Not found any user');
+            }
+        });
+    });
+
 app.use('/api', router);
 
 app.listen(port, function () {
