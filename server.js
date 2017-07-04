@@ -1,13 +1,14 @@
 var express = require('express');
-var app = express();
 var bodyParser = require('body-parser');
-
 var jwt = require('jsonwebtoken');
-var config = require('./config');
-var SECRET = 'someSecret';
 
+var app = express();
+
+var config = require('./config');
 var connect = require('./dbconnection');
+
 var port = process.env.PORT || 8080;
+
 app.set('secret', config.secret);
 
 app.use(bodyParser.json());
@@ -15,7 +16,6 @@ app.use(bodyParser.urlencoded({
     extended: true
 }));
 
-// an instance of the router for api routes
 var router = express.Router();
 
 //region Users API
@@ -140,7 +140,7 @@ router.route('/me')
             }
             else {
                 res.status(401, 'Unauthorized');
-                res.json('empty');
+                res.end();
             }
         });
     });
@@ -253,7 +253,7 @@ router.route('/user/:id')
             }
             else {
                 res.status(404, 'Not found');
-                res.json('empty');
+                res.end();
             }
         })
     });
@@ -355,6 +355,7 @@ router.route('/item')
             }
             else {
                 res.status(401, 'Unauthorized');
+                res.end();
             }
         });
     });
@@ -402,7 +403,7 @@ router.route('/item/:id')
         var itemId = req.params.id;
 
         var sql = 'SELECT items.*, users.uid, users.phone, users.username, users.email ' +
-                    'FROM items, users WHERE items.iid=? AND items.uid=users.uid';
+            'FROM items, users WHERE items.iid=? AND items.uid=users.uid';
         connect.query(sql, itemId, function (err, result) {
             if (err) throw err;
 
@@ -426,6 +427,135 @@ router.route('/item/:id')
             }
             else {
                 res.status(404, 'Not found');
+                res.end();
+            }
+        });
+    });
+
+// Search items
+router.route('/item')
+    .get(function (req, res) {
+
+        var searchQuery = [];
+        var sql = '';
+        var order_by = (req.query.order_by != 'price') ? 'items.created_at' : 'items.price';
+        var order_type = (req.query.order_type != 'asc') ? ' DESC' : ' ASC';
+
+        if (req.query.title && req.query.user_id) {
+            searchQuery = [req.query.title, req.query.user_id];
+            sql = 'SELECT items.*, users.uid, users.phone, users.username, users.email ' +
+                'FROM items, users WHERE (items.title=? OR items.uid=?) AND users.uid=items.uid ORDER BY ' + order_by + order_type;
+        }
+        else if (!req.query.title && req.query.user_id) {
+            searchQuery = [req.query.user_id];
+            sql = 'SELECT items.*, users.uid, users.phone, users.username, users.email ' +
+                'FROM items, users WHERE items.uid=? AND users.uid=items.uid ORDER BY ' + order_by + order_type;
+        }
+        else if (req.query.title && !req.query.user_id) {
+            searchQuery = [req.query.title];
+            sql = 'SELECT items.*, users.uid, users.phone, users.username, users.email ' +
+                'FROM items, users WHERE items.title=? AND users.uid=items.uid ORDER BY ' + order_by + order_type;
+        }
+        else {
+            sql = 'SELECT items.*, users.uid, users.phone, users.username, users.email ' +
+                'FROM items, users WHERE users.uid=items.uid ORDER BY ' + order_by + order_type;
+        }
+
+        connect.query(sql, searchQuery, function (err, items) {
+            if (err) throw err;
+
+            var findItem = {};
+
+            if (items) {
+                for (var i = 0; i < items.length; i++) {
+                    findItem[i] = {
+                        'id': items[i].iid,
+                        'created_at': items[i].created_at,
+                        'title': items[i].title,
+                        'price': items[i].price,
+                        'image': items[i].image,
+                        'user_id': items[i].uid,
+                        user: {
+                            'id': items[i].uid,
+                            'phone': items[i].phone,
+                            'name': items[i].username,
+                            'email': items[i].email
+                        }
+                    };
+                }
+                res.json(findItem);
+            }
+
+            else {
+                res.status(404, 'Not found');
+                res.end();
+            }
+        });
+    });
+
+// Update item
+router.route('/item/:id')
+    .put(function (req, res) {
+
+        var itemID = req.params.id;
+        var regex = /^\d+(?:\.\d{0,2})$/;
+
+        if (!req.body.title || req.body.title < 3) {
+            res.status(422, 'Unprocessable Entity');
+            res.json({"field": "title", "message": "Title should contain at least 3 characters"});
+        }
+        if (!req.body.price || !regex.test(req.body.price)) {
+            res.status(422, 'Unprocessable Entity');
+            res.json({"field": "price", "message": "Price is not valid"});
+        }
+
+        var sql = 'SELECT items.*, users.uid, users.phone, users.username, users.email ' +
+            'FROM items, users WHERE items.iid=? AND users.uid=items.uid';
+        connect.query(sql, itemID, function (err, result) {
+            if (err) throw err;
+
+            var item = result[0];
+            var newItem = Object.assign({}, item);
+
+            if (item) {
+                var current_userId = req.decoded.id;
+
+                if (item.uid == current_userId) {
+                    if (item.title && item.title != req.body.title) {
+                        newItem.title = req.body.title;
+                    }
+                    if (item.price && item.price != req.body.price) {
+                        newItem.price = req.body.price;
+                    }
+
+                    var sql = 'UPDATE items SET title=?, price=? WHERE iid= ' + itemID;
+                    connect.query(sql, [newItem.title, newItem.price], function (err, result) {
+
+                        if (err) throw err;
+
+                        else {
+                            res.status(200, 'OK');
+                            res.json({
+                                'id': newItem.iid,
+                                'created_at': newItem.created_at,
+                                'title': newItem.title,
+                                'price': newItem.price,
+                                'product_img': newItem.product_img,
+                                'user_id': newItem.uid,
+                                 user: {
+                                     'id': newItem.uid,
+                                     'telephone': newItem.telephone,
+                                     'name': newItem.username,
+                                     'email': newItem.email
+                                 }
+                            });
+                        }
+                    });
+                }
+            }
+            else {
+                res.status(404, 'Not found');
+                res.end();
             }
         });
     });
