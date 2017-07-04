@@ -1,6 +1,8 @@
 var express = require('express');
 var bodyParser = require('body-parser');
 var jwt = require('jsonwebtoken');
+var formidable = require('formidable');
+var fs = require('fs');
 
 var app = express();
 
@@ -61,33 +63,47 @@ router.route('/register')
         var password = req.body.passw;
         var phone = req.body.phone;
 
-        connect.query('SELECT * FROM users WHERE email=?', email, function (err, users) {
-            if (err) throw err;
+        var regex = /^(([^<>()[\]\\.,;:\s@\"]+(\.[^<>()[\]\\.,;:\s@\"]+)*)|(\".+\"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
 
-            var user = users[0];
+        if (regex.test(email)) {
 
-            if (user) {
-                res.json({Body: {success: false, message: 'User already exist'}});
-            }
-
-            else {
-
-                var sql = 'INSERT INTO users SET ?';
-                var value = {username: name, email: email, password: password, phone: phone};
-
-                connect.query(sql, value, function (err, result) {
+            if (password.length > 5 && password.length < 20) {
+                connect.query('SELECT * FROM users WHERE email=?', email, function (err, users) {
                     if (err) throw err;
 
-                    var token = jwt.sign({id: result.insertId}, app.get('secret'), {
-                        expiresIn: '3h' // expires in 3 hours
-                    });
+                    var user = users[0];
 
-                    res.status(200, "OK");
-                    res.json({token: token});
-                })
+                    if (user) {
+                        res.json({Body: {success: false, message: 'User already exist'}});
+                    }
+
+                    else {
+
+                        var sql = 'INSERT INTO users SET ?';
+                        var value = {username: name, email: email, password: password, phone: phone};
+
+                        connect.query(sql, value, function (err, result) {
+                            if (err) throw err;
+
+                            var token = jwt.sign({id: result.insertId}, app.get('secret'), {
+                                expiresIn: '3h' // expires in 3 hours
+                            });
+
+                            res.status(200, "OK");
+                            res.json({token: token});
+                        })
+                    }
+                });
             }
-        });
-
+            else {
+                res.status(422, "Unprocessable Entity");
+                res.json('Enter a valid valid password');
+            }
+        }
+        else {
+            res.status(422, "Unprocessable Entity");
+            res.json('Enter a valid email address');
+        }
     });
 
 // Route middleware to verify a token
@@ -558,6 +574,28 @@ router.route('/item/:id')
                 res.end();
             }
         });
+    });
+
+// Upload item image
+router.route('/item/:id/image')
+    .post(function (req, res) {
+
+        var itemId = req.params.id;
+        if (req.url == '/item/' + itemId + '/image' && req.method.toLowerCase() == 'post') {
+
+            var form = new formidable.IncomingForm();
+            //form.uploadDir = './public/img/upload_img';
+
+            form.parse(req);
+
+            form.on('fileBegin', function (name, file){
+                file.path = __dirname + '/public/img/upload_img/' + file.name;
+            });
+
+            form.on('file', function (name, file){
+                console.log('Uploaded ' + file.name);
+            });
+        }
     });
 
 //endregion
